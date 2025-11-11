@@ -1,216 +1,207 @@
-
-import type { Todo } from "./types";
-import { initTodos } from "./initTodos";
-import WelcomeMessage from "./WelcomeMessage";
-import TodoList from "./TodoList";
-import { v4 as uuid } from "uuid";
-import dayjs from "dayjs";
-import { twMerge } from "tailwind-merge"; // ◀◀ 追加
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"; // ◀◀ 追加
-import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons"; // ◀◀ 追加
 import { useState, useEffect } from "react";
+import { Plus } from "lucide-react";
+import type { Goal, GoalMap, SortOption } from "./types";
+import { getRootGoals, generateId } from "./utils";
+import LeafGoalsList from "./LeafGoalsList";
+import GoalItem from "./GoalItem";
+import GoalEditor from "./GoalEditor";
 
 const App = () => {
-    const [todos, setTodos] = useState<Todo[]>([]); // ◀◀ 編集
-    const [newTodoName, setNewTodoName] = useState("");
-    const [newTodoPriority, setNewTodoPriority] = useState(3);
-    const [newTodoDeadline, setNewTodoDeadline] = useState<Date | null>(null);
-    const [newTodoNameError, setNewTodoNameError] = useState("");
-  
-    const [initialized, setInitialized] = useState(false); // ◀◀ 追加
-    const localStorageKey = "TodoApp"; // ◀◀ 追加
-  
-    // App コンポーネントの初回実行時のみLocalStorageからTodoデータを復元
-    useEffect(() => {
-      const todoJsonStr = localStorage.getItem(localStorageKey);
-      if (todoJsonStr && todoJsonStr !== "[]") {
-        const storedTodos: Todo[] = JSON.parse(todoJsonStr);
-        const convertedTodos = storedTodos.map((todo) => ({
-          ...todo,
-          deadline: todo.deadline ? new Date(todo.deadline) : null,
-        }));
-        setTodos(convertedTodos);
-      } else {
-        // LocalStorage にデータがない場合は initTodos をセットする
-        setTodos(initTodos);
-      }
-      setInitialized(true);
-    }, []);
-  
-    // 状態 todos または initialized に変更があったときTodoデータを保存
-    useEffect(() => {
-      if (initialized) {
-        localStorage.setItem(localStorageKey, JSON.stringify(todos));
-      }
-    }, [todos, initialized]);
-  
-    const uncompletedCount = todos.filter(
-      (todo: Todo) => !todo.isDone
-    ).length;
+  const [goals, setGoals] = useState<GoalMap>({});
+  const [sortOptions, setSortOptions] = useState<{ [goalId: string]: SortOption }>({});
+  const [showAddRoot, setShowAddRoot] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  // ▼▼ 追加
-  const isValidTodoName = (name: string): string => {
-    if (name.length < 2 || name.length > 32) {
-      return "2文字以上、32文字以内で入力してください";
-    } else {
-      return "";
+  const localStorageKey = "HierarchicalGoalApp";
+
+  // ローカルストレージから復元
+  useEffect(() => {
+    const storedData = localStorage.getItem(localStorageKey);
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      const converted: GoalMap = {};
+      Object.keys(parsed).forEach((id) => {
+        converted[id] = {
+          ...parsed[id],
+          startDate: parsed[id].startDate
+            ? new Date(parsed[id].startDate)
+            : null,
+          deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null,
+        };
+      });
+      setGoals(converted);
     }
-  };
+    setInitialized(true);
+  }, []);
 
-  const updateNewTodoName = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewTodoNameError(isValidTodoName(e.target.value)); // ◀◀ 追加
-    setNewTodoName(e.target.value);
-  };
-
-  const updateNewTodoPriority = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewTodoPriority(Number(e.target.value));
-  };
-
-  const updateDeadline = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const dt = e.target.value; // UIで日時が未設定のときは空文字列 "" が dt に格納される
-    console.log(`UI操作で日時が "${dt}" (${typeof dt}型) に変更されました。`);
-    setNewTodoDeadline(dt === "" ? null : new Date(dt));
-  };
-
-  const addNewTodo = () => {
-    // ▼▼ 編集
-    const err = isValidTodoName(newTodoName);
-    if (err !== "") {
-      setNewTodoNameError(err);
-      return;
+  // ローカルストレージに保存
+  useEffect(() => {
+    if (initialized) {
+      localStorage.setItem(localStorageKey, JSON.stringify(goals));
     }
-    const newTodo: Todo = {
-      id: uuid(),
-      name: newTodoName,
-      isDone: false,
-      priority: newTodoPriority,
-      deadline: newTodoDeadline,
-    };
-    const updatedTodos = [...todos, newTodo];
-    setTodos(updatedTodos);
-    setNewTodoName("");
-    setNewTodoPriority(3);
-    setNewTodoDeadline(null);
+  }, [goals, initialized]);
+
+  const updateGoal = (id: string, updates: Partial<Goal>) => {
+    setGoals((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], ...updates },
+    }));
   };
 
-  const updateIsDone = (id: string, value: boolean) => {
-    const updatedTodos = todos.map((todo) => {
-      if (todo.id === id) {
-        return { ...todo, isDone: value }; // スプレッド構文
-      } else {
-        return todo;
+  const deleteGoal = (id: string) => {
+    setGoals((prev) => {
+      const goal = prev[id];
+      if (!goal) return prev;
+
+      const updated = { ...prev };
+
+      // 親から自分を削除
+      if (goal.parentId) {
+        const parent = updated[goal.parentId];
+        if (parent) {
+          updated[goal.parentId] = {
+            ...parent,
+            childIds: parent.childIds.filter((childId) => childId !== id),
+          };
+        }
       }
+
+      // 子孫を再帰的に削除
+      const deleteRecursive = (goalId: string) => {
+        const g = updated[goalId];
+        if (g) {
+          g.childIds.forEach((childId) => deleteRecursive(childId));
+          delete updated[goalId];
+        }
+      };
+
+      deleteRecursive(id);
+      return updated;
     });
-    setTodos(updatedTodos);
   };
 
-  const removeCompletedTodos = () => {
-    const updatedTodos = todos.filter((todo) => !todo.isDone);
-    setTodos(updatedTodos);
+  const toggleDone = (id: string) => {
+    const goal = goals[id];
+    if (!goal) return;
+
+    const newIsDone = !goal.isDone;
+
+    setGoals((prev) => {
+      const updated = { ...prev };
+
+      // 自分と子孫全てを同じ状態に
+      const updateRecursive = (goalId: string, isDone: boolean) => {
+        const g = updated[goalId];
+        if (g) {
+          updated[goalId] = { ...g, isDone };
+          g.childIds.forEach((childId) => updateRecursive(childId, isDone));
+        }
+      };
+
+      updateRecursive(id, newIsDone);
+      return updated;
+    });
   };
 
-  const remove = (id: string) => {
-    const updatedTodos = todos.filter((todo) => todo.id !== id);
-    setTodos(updatedTodos);
+  const toggleExpanded = (id: string) => {
+    updateGoal(id, { isExpanded: !goals[id].isExpanded });
+  };
+
+  const addGoal = (parentId: string | null, goalData: {
+    name: string;
+    importance: number;
+    startDate: Date | null;
+    deadline: Date | null;
+  }) => {
+    const newGoal: Goal = {
+      id: generateId(),
+      name: goalData.name,
+      isDone: false,
+      importance: goalData.importance,
+      startDate: goalData.startDate,
+      deadline: goalData.deadline,
+      parentId,
+      childIds: [],
+      isExpanded: true,
+    };
+
+    setGoals((prev) => {
+      const updated = { ...prev, [newGoal.id]: newGoal };
+
+      if (parentId) {
+        const parent = updated[parentId];
+        if (parent) {
+          updated[parentId] = {
+            ...parent,
+            childIds: [...parent.childIds, newGoal.id],
+          };
+        }
+      }
+
+      return updated;
+    });
   };
 
   return (
-    <div className="mx-4 mt-10 max-w-2xl md:mx-auto">
-      <h1 className="mb-4 text-2xl font-bold">TodoApp</h1>
-      <div className="mb-4">
-        <WelcomeMessage
-          name="寝屋川タヌキ"
-          uncompletedCount={uncompletedCount}
-        />
-      </div>
-      <TodoList todos={todos} updateIsDone={updateIsDone} remove={remove} />
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="mx-auto max-w-6xl px-4 py-8">
+        {/* ヘッダー */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-slate-800 mb-2">
+            目標管理
+          </h1>
+          <p className="text-slate-600">
+            大きな目標を小さなステップに分解して、着実に達成しましょう
+          </p>
+        </div>
 
-      <button
-        type="button"
-        onClick={removeCompletedTodos}
-        className={
-            "mt-5 rounded-md bg-red-500 px-3 py-1 font-bold text-white hover:bg-red-600"
-        }
-        >
-        完了済みのタスクを削除
-      </button>
+        {/* 末端タスク一覧 */}
+        <LeafGoalsList goals={goals} toggleDone={toggleDone} />
 
-      <div className="mt-5 space-y-2 rounded-md border p-3">
-        <h2 className="text-lg font-bold">新しいタスクの追加</h2>
-        {/* 編集: ここから... */}
-        <div>
-          <div className="flex items-center space-x-2">
-            <label className="font-bold" htmlFor="newTodoName">
-              名前
-            </label>
-            <input
-              id="newTodoName"
-              type="text"
-              value={newTodoName}
-              onChange={updateNewTodoName}
-              className={twMerge(
-                "grow rounded-md border p-2",
-                newTodoNameError && "border-red-500 outline-red-500"
-              )}
-              placeholder="2文字以上、32文字以内で入力してください"
-            />
+        {/* メイン目標リスト */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-slate-800">
+              大きな目標
+            </h2>
+            <button
+              onClick={() => setShowAddRoot(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              <Plus size={18} />
+              新しい大きな目標
+            </button>
           </div>
-          {newTodoNameError && (
-            <div className="ml-10 flex items-center space-x-1 text-sm font-bold text-red-500">
-              <FontAwesomeIcon
-                icon={faTriangleExclamation}
-                className="mr-0.5"
-              />
-              <div>{newTodoNameError}</div>
-            </div>
+
+          {showAddRoot && (
+            <GoalEditor
+              goal={null}
+              onSave={(name, importance, startDate, deadline) => {
+                addGoal(null, { name, importance, startDate, deadline });
+                setShowAddRoot(false);
+              }}
+              onCancel={() => setShowAddRoot(false)}
+            />
           )}
-        </div>
-        {/* ...ここまで */}
 
-        <div className="flex gap-5">
-          <div className="font-bold">優先度</div>
-          {[1, 2, 3].map((value) => (
-            <label key={value} className="flex items-center space-x-1">
-              <input
-                id={`priority-${value}`}
-                name="priorityGroup"
-                type="radio"
-                value={value}
-                checked={newTodoPriority === value}
-                onChange={updateNewTodoPriority}
+          <div className="space-y-3">
+            {getRootGoals(goals).map((goal) => (
+              <GoalItem
+                key={goal.id}
+                goal={goal}
+                goals={goals}
+                onUpdate={updateGoal}
+                onDelete={deleteGoal}
+                onToggleDone={toggleDone}
+                onToggleExpanded={toggleExpanded}
+                sortBy={sortOptions[goal.id] || "none"}
+                onSortChange={(sortBy) =>
+                  setSortOptions((prev) => ({ ...prev, [goal.id]: sortBy }))
+                }
               />
-              <span>{value}</span>
-            </label>
-          ))}
+            ))}
+          </div>
         </div>
-
-        <div className="flex items-center gap-x-2">
-          <label htmlFor="deadline" className="font-bold">
-            期限
-          </label>
-          <input
-            type="datetime-local"
-            id="deadline"
-            value={
-              newTodoDeadline
-                ? dayjs(newTodoDeadline).format("YYYY-MM-DDTHH:mm:ss")
-                : ""
-            }
-            onChange={updateDeadline}
-            className="rounded-md border border-gray-400 px-2 py-0.5"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={addNewTodo}
-          className={twMerge(
-            "rounded-md bg-indigo-500 px-3 py-1 font-bold text-white hover:bg-indigo-600",
-            newTodoNameError && "cursor-not-allowed opacity-50"
-          )}
-        >
-          追加
-        </button>
       </div>
     </div>
   );
