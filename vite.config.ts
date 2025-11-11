@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc"
 import tailwindcss from "@tailwindcss/vite";
+import path from "path"; // ◀◀ 追加
+
+const repositoryName = "react-todo-app"; // ◀◀ 追加
 
 // https://vite.dev/config/
 export default defineConfig({
