@@ -6,8 +6,8 @@ export interface Goal {
     childIds: string[];
     isDone: boolean;
     importance: number; // 1〜5 など
-    startDate: string | null; // 日付文字列
-    deadline: string | null; // 日付文字列
+    startDate: Date | null; // 日付文字列
+    deadline: Date | null; // 日付文字列
     isExpanded: boolean;
   }
   

@@ -23,10 +23,8 @@ const App = () => {
       Object.keys(parsed).forEach((id) => {
         converted[id] = {
           ...parsed[id],
-          startDate: parsed[id].startDate
-            ? new Date(parsed[id].startDate)
-            : null,
-          deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null,
+          startDate: parsed[id].startDate ? new Date(parsed[id].startDate) : null, // Date型に変換
+          deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null, // Date型に変換
         };
       });
       setGoals(converted);
