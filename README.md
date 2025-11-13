@@ -1,10 +1,12 @@
+# Todo アプリをホストしている GitHub Pages の URL
+https://taiga-y9.github.io/react-todo-app/
 # TodoApp
 
 React、TypeScript、Tailwind CSS を使用し、ローカルストレージでデータを永続化した「Todoアプリ」です。
 
 ## 開発履歴
 
-- 2025年10月23日：プロジェクト開始
+開発期間: 2025.11.1 ~ 2025.11.xx (約XXX時間)
 
 ## ライセンス
 

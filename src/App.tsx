@@ -23,8 +23,8 @@ const App = () => {
       Object.keys(parsed).forEach((id) => {
         converted[id] = {
           ...parsed[id],
-          startDate: parsed[id].startDate ? new Date(parsed[id].startDate) : null, // Date型に変換
-          deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null, // Date型に変換
+          startDate: parsed[id].startDate ? new Date(parsed[id].startDate) : null,
+          deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null,
         };
       });
       setGoals(converted);
@@ -192,6 +192,7 @@ const App = () => {
                 onDelete={deleteGoal}
                 onToggleDone={toggleDone}
                 onToggleExpanded={toggleExpanded}
+                onAddChild={addGoal}
                 sortBy={sortOptions[goal.id] || "none"}
                 onSortChange={(sortBy) =>
                   setSortOptions((prev) => ({ ...prev, [goal.id]: sortBy }))

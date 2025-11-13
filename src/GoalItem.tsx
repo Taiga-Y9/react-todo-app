@@ -7,7 +7,7 @@ import {
   Calendar,
 } from "lucide-react";
 import type { Goal, GoalMap, SortOption } from "./types";
-import { calculateProgress, sortGoals, generateId } from "./utils";
+import { calculateProgress, sortGoals } from "./utils";
 import GoalEditor from "./GoalEditor";
 
 type Props = {
@@ -17,6 +17,12 @@ type Props = {
   onDelete: (id: string) => void;
   onToggleDone: (id: string) => void;
   onToggleExpanded: (id: string) => void;
+  onAddChild: (parentId: string, goalData: {
+    name: string;
+    importance: number;
+    startDate: Date | null;
+    deadline: Date | null;
+  }) => void;
   sortBy: SortOption;
   onSortChange: (sortBy: SortOption) => void;
   depth?: number;
@@ -30,6 +36,7 @@ const GoalItem = (props: Props) => {
     onDelete,
     onToggleDone,
     onToggleExpanded,
+    onAddChild,
     sortBy,
     onSortChange,
     depth = 0,
@@ -190,11 +197,7 @@ const GoalItem = (props: Props) => {
             <GoalEditor
               goal={null}
               onSave={(name, importance, startDate, deadline) => {
-                const newGoalId = generateId();
-                onUpdate(goal.id, {
-                  childIds: [...goal.childIds, newGoalId],
-                });
-                // 新しい子目標を追加するロジックは親で処理
+                onAddChild(goal.id, { name, importance, startDate, deadline });
                 setShowAddChild(false);
               }}
               onCancel={() => setShowAddChild(false)}
@@ -216,6 +219,7 @@ const GoalItem = (props: Props) => {
                 onDelete={onDelete}
                 onToggleDone={onToggleDone}
                 onToggleExpanded={onToggleExpanded}
+                onAddChild={onAddChild}
                 sortBy={sortBy}
                 onSortChange={onSortChange}
                 depth={depth + 1}
