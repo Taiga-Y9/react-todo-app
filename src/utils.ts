@@ -1,4 +1,4 @@
-import type { Goal, GoalMap } from "./types";
+import type { Goal, GoalMap, FilterOptions, Statistics } from "./types";
 
 // UUID生成（簡易版）
 export const generateId = (): string => {
@@ -44,6 +44,9 @@ export const sortGoals = (
   
   return [...goals].sort((a, b) => {
     switch (sortBy) {
+      case 'order':
+        return a.order - b.order;
+      
       case 'deadline':
         if (!a.deadline && !b.deadline) return 0;
         if (!a.deadline) return 1;
@@ -62,4 +65,88 @@ export const sortGoals = (
         return 0;
     }
   });
+};
+
+// フィルタリング
+export const filterGoals = (goals: Goal[], filter: FilterOptions): Goal[] => {
+  return goals.filter(goal => {
+    // 検索テキスト
+    if (filter.searchText && !goal.name.toLowerCase().includes(filter.searchText.toLowerCase())) {
+      return false;
+    }
+    
+    // タグ
+    if (filter.tags.length > 0 && !filter.tags.some(tag => goal.tags.includes(tag))) {
+      return false;
+    }
+    
+    // 完了状態
+    if (filter.isDone !== null && goal.isDone !== filter.isDone) {
+      return false;
+    }
+    
+    // 重要度
+    if (filter.importance !== null && goal.importance !== filter.importance) {
+      return false;
+    }
+    
+    // 期限切れ
+    if (filter.overdueOnly) {
+      if (!goal.deadline || goal.isDone || goal.deadline.getTime() > Date.now()) {
+        return false;
+      }
+    }
+    
+    return true;
+  });
+};
+
+// 全てのタグを取得
+export const getAllTags = (goals: GoalMap): string[] => {
+  const tagSet = new Set<string>();
+  Object.values(goals).forEach(goal => {
+    goal.tags.forEach(tag => tagSet.add(tag));
+  });
+  return Array.from(tagSet).sort();
+};
+
+// 統計情報を計算
+export const calculateStatistics = (goals: GoalMap): Statistics => {
+  const allGoals = Object.values(goals);
+  const now = new Date();
+  
+  const totalGoals = allGoals.length;
+  const completedGoals = allGoals.filter(g => g.isDone).length;
+  const overdueGoals = allGoals.filter(
+    g => !g.isDone && g.deadline && g.deadline.getTime() < now.getTime()
+  ).length;
+  
+  const byImportance: { [key: number]: number } = {};
+  for (let i = 1; i <= 5; i++) {
+    byImportance[i] = allGoals.filter(g => g.importance === i).length;
+  }
+  
+  const byTag: { [key: string]: number } = {};
+  allGoals.forEach(goal => {
+    goal.tags.forEach(tag => {
+      byTag[tag] = (byTag[tag] || 0) + 1;
+    });
+  });
+  
+  return {
+    totalGoals,
+    completedGoals,
+    overdueGoals,
+    completionRate: totalGoals > 0 ? (completedGoals / totalGoals) * 100 : 0,
+    byImportance,
+    byTag,
+    weeklyCompleted: 0,
+    monthlyCompleted: 0,
+  };
+};
+
+// 期限切れかチェック
+export const isOverdue = (goal: Goal): boolean => {
+  if (!goal.deadline || goal.isDone) return false;
+  return goal.deadline.getTime() < Date.now();
 };
