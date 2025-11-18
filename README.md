@@ -72,25 +72,7 @@ export const calculateProgress = (goalId: string, goals: GoalMap): number => {
 フィルター適用時も階層構造を維持
 ## 開発履歴
 
-開発期間: 2025.11.1 ~ 2025.11.18 (約30時間)
-
-## 技術スタック
-- **React**
-- **TypeScript**
-- **Vite**
-
-- **Tailwind CSS**
-- **Lucide React**
-
-- **date-fns**
-- **uuid**
-
-- **ESLint**
-- **Prettier**
-- **TypeScript ESLint**
-
-- **GitHub Pages**
-- **gh-pages**
+開発期間: 2025.11.1 ~ 2025.11.xx (約XXX時間)
 
 ## ライセンス
 

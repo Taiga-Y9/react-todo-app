@@ -5,14 +5,16 @@ import {
   Plus,
   Trash2,
   Calendar,
+  GripVertical,
 } from "lucide-react";
 import type { Goal, GoalMap, SortOption } from "./types";
-import { calculateProgress, sortGoals } from "./utils";
+import { calculateProgress, sortGoals, isOverdue } from "./utils";
 import GoalEditor from "./GoalEditor";
 
 type Props = {
   goal: Goal;
   goals: GoalMap;
+  availableTags: string[];
   onUpdate: (id: string, updates: Partial<Goal>) => void;
   onDelete: (id: string) => void;
   onToggleDone: (id: string) => void;
@@ -22,9 +24,13 @@ type Props = {
     importance: number;
     startDate: Date | null;
     deadline: Date | null;
+    tags: string[];
   }) => void;
   sortBy: SortOption;
   onSortChange: (sortBy: SortOption) => void;
+  onDragStart?: (e: React.DragEvent, goalId: string) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent, targetGoalId: string) => void;
   depth?: number;
 };
 
@@ -32,6 +38,7 @@ const GoalItem = (props: Props) => {
   const {
     goal,
     goals,
+    availableTags,
     onUpdate,
     onDelete,
     onToggleDone,
@@ -39,6 +46,9 @@ const GoalItem = (props: Props) => {
     onAddChild,
     sortBy,
     onSortChange,
+    onDragStart,
+    onDragOver,
+    onDrop,
     depth = 0,
   } = props;
 
@@ -47,14 +57,26 @@ const GoalItem = (props: Props) => {
 
   const progress = calculateProgress(goal.id, goals);
   const hasChildren = goal.childIds.length > 0;
+  const overdue = isOverdue(goal);
 
   const childGoals = goal.childIds.map((id) => goals[id]).filter(Boolean);
   const sortedChildren = sortGoals(childGoals, goals, sortBy);
 
   return (
     <div className="border border-slate-200 rounded-lg overflow-hidden">
-      <div className="p-4 bg-white hover:bg-slate-50 transition-colors">
+      <div 
+        className="p-4 bg-white hover:bg-slate-50 transition-colors"
+        draggable={!isEditing}
+        onDragStart={(e) => onDragStart?.(e, goal.id)}
+        onDragOver={onDragOver}
+        onDrop={(e) => onDrop?.(e, goal.id)}
+      >
         <div className="flex items-start gap-3">
+          {/* ドラッグハンドル */}
+          <div className="mt-1 text-slate-300 hover:text-slate-500 cursor-move">
+            <GripVertical size={20} />
+          </div>
+
           {/* 展開/折りたたみボタン */}
           {hasChildren && (
             <button
@@ -83,8 +105,9 @@ const GoalItem = (props: Props) => {
             {isEditing ? (
               <GoalEditor
                 goal={goal}
-                onSave={(name, importance, startDate, deadline) => {
-                  onUpdate(goal.id, { name, importance, startDate, deadline });
+                availableTags={availableTags}
+                onSave={(name, importance, startDate, deadline, tags) => {
+                  onUpdate(goal.id, { name, importance, startDate, deadline, tags });
                   setIsEditing(false);
                 }}
                 onCancel={() => {
@@ -103,11 +126,19 @@ const GoalItem = (props: Props) => {
                       className={`text-lg font-medium ${
                         goal.isDone
                           ? "text-slate-400 line-through"
+                          : overdue
+                          ? "text-red-600"
                           : "text-slate-800"
                       }`}
                     >
                       {goal.name}
+                      {overdue && (
+                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                          期限切れ
+                        </span>
+                      )}
                     </h3>
+                    
                     <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
                       {goal.deadline && (
                         <span className="flex items-center gap-1">
@@ -129,6 +160,20 @@ const GoalItem = (props: Props) => {
                         ))}
                       </div>
                     </div>
+
+                    {/* タグ表示 */}
+                    {goal.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {goal.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -179,7 +224,7 @@ const GoalItem = (props: Props) => {
                       }
                       className="px-2 py-1.5 text-sm border border-slate-300 rounded"
                     >
-                      <option value="none">並び替え</option>
+                      <option value="order">並び順</option>
                       <option value="deadline">期限順</option>
                       <option value="importance">重要度順</option>
                       <option value="progress">進捗順</option>
@@ -196,8 +241,9 @@ const GoalItem = (props: Props) => {
           <div className="mt-4 ml-8">
             <GoalEditor
               goal={null}
-              onSave={(name, importance, startDate, deadline) => {
-                onAddChild(goal.id, { name, importance, startDate, deadline });
+              availableTags={availableTags}
+              onSave={(name, importance, startDate, deadline, tags) => {
+                onAddChild(goal.id, { name, importance, startDate, deadline, tags });
                 setShowAddChild(false);
               }}
               onCancel={() => setShowAddChild(false)}
@@ -215,6 +261,7 @@ const GoalItem = (props: Props) => {
                 key={child.id}
                 goal={child}
                 goals={goals}
+                availableTags={availableTags}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onToggleDone={onToggleDone}
@@ -222,6 +269,9 @@ const GoalItem = (props: Props) => {
                 onAddChild={onAddChild}
                 sortBy={sortBy}
                 onSortChange={onSortChange}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
                 depth={depth + 1}
               />
             ))}

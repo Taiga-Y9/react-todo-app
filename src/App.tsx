@@ -1,16 +1,28 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
-import type { Goal, GoalMap, SortOption } from "./types";
-import { getRootGoals, generateId } from "./utils";
+import type { Goal, GoalMap, SortOption, FilterOptions } from "./types";
+import { getRootGoals, generateId, getAllTags, calculateStatistics, filterGoals } from "./utils";
 import LeafGoalsList from "./LeafGoalsList";
 import GoalItem from "./GoalItem";
 import GoalEditor from "./GoalEditor";
+import SearchFilter from "./SearchFilter";
+import StatisticsDashboard from "./StatisticsDashboard";
 
 const App = () => {
   const [goals, setGoals] = useState<GoalMap>({});
   const [sortOptions, setSortOptions] = useState<{ [goalId: string]: SortOption }>({});
   const [showAddRoot, setShowAddRoot] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [draggedGoalId, setDraggedGoalId] = useState<string | null>(null);
+  
+  // フィルター状態
+  const [filter, setFilter] = useState<FilterOptions>({
+    searchText: "",
+    tags: [],
+    isDone: null,
+    importance: null,
+    overdueOnly: false,
+  });
 
   const localStorageKey = "HierarchicalGoalApp";
 
@@ -25,6 +37,8 @@ const App = () => {
           ...parsed[id],
           startDate: parsed[id].startDate ? new Date(parsed[id].startDate) : null,
           deadline: parsed[id].deadline ? new Date(parsed[id].deadline) : null,
+          tags: parsed[id].tags || [],
+          order: parsed[id].order !== undefined ? parsed[id].order : 0,
         };
       });
       setGoals(converted);
@@ -110,7 +124,16 @@ const App = () => {
     importance: number;
     startDate: Date | null;
     deadline: Date | null;
+    tags: string[];
   }) => {
+    const siblings = parentId 
+      ? (goals[parentId]?.childIds || [])
+      : getRootGoals(goals).map(g => g.id);
+    
+    const maxOrder = siblings.length > 0
+      ? Math.max(...siblings.map(id => goals[id]?.order || 0))
+      : -1;
+
     const newGoal: Goal = {
       id: generateId(),
       name: goalData.name,
@@ -121,6 +144,8 @@ const App = () => {
       parentId,
       childIds: [],
       isExpanded: true,
+      tags: goalData.tags,
+      order: maxOrder + 1,
     };
 
     setGoals((prev) => {
@@ -140,6 +165,59 @@ const App = () => {
     });
   };
 
+  // ドラッグ&ドロップ処理
+  const handleDragStart = (e: React.DragEvent, goalId: string) => {
+    setDraggedGoalId(goalId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetGoalId: string) => {
+    e.preventDefault();
+    
+    if (!draggedGoalId || draggedGoalId === targetGoalId) {
+      setDraggedGoalId(null);
+      return;
+    }
+
+    const draggedGoal = goals[draggedGoalId];
+    const targetGoal = goals[targetGoalId];
+    
+    if (!draggedGoal || !targetGoal) {
+      setDraggedGoalId(null);
+      return;
+    }
+
+    // 同じ親を持つ場合のみ並び替え
+    if (draggedGoal.parentId === targetGoal.parentId) {
+      setGoals(prev => {
+        const updated = { ...prev };
+        const draggedOrder = draggedGoal.order;
+        const targetOrder = targetGoal.order;
+
+        // 順序を入れ替え
+        updated[draggedGoalId] = { ...draggedGoal, order: targetOrder };
+        updated[targetGoalId] = { ...targetGoal, order: draggedOrder };
+
+        return updated;
+      });
+    }
+
+    setDraggedGoalId(null);
+  };
+
+  // 統計計算
+  const statistics = calculateStatistics(goals);
+  const availableTags = getAllTags(goals);
+  
+  // フィルタリング適用
+  const rootGoals = getRootGoals(goals);
+  const filteredRootGoals = filterGoals(rootGoals, filter);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -153,6 +231,16 @@ const App = () => {
           </p>
         </div>
 
+        {/* 統計ダッシュボード */}
+        <StatisticsDashboard statistics={statistics} />
+
+        {/* 検索・フィルター */}
+        <SearchFilter
+          filter={filter}
+          onFilterChange={setFilter}
+          availableTags={availableTags}
+        />
+
         {/* 末端タスク一覧 */}
         <LeafGoalsList goals={goals} toggleDone={toggleDone} />
 
@@ -161,6 +249,11 @@ const App = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-slate-800">
               大きな目標
+              {filteredRootGoals.length !== rootGoals.length && (
+                <span className="ml-2 text-sm text-slate-500">
+                  ({filteredRootGoals.length} / {rootGoals.length})
+                </span>
+              )}
             </h2>
             <button
               onClick={() => setShowAddRoot(true)}
@@ -174,8 +267,9 @@ const App = () => {
           {showAddRoot && (
             <GoalEditor
               goal={null}
-              onSave={(name, importance, startDate, deadline) => {
-                addGoal(null, { name, importance, startDate, deadline });
+              availableTags={availableTags}
+              onSave={(name, importance, startDate, deadline, tags) => {
+                addGoal(null, { name, importance, startDate, deadline, tags });
                 setShowAddRoot(false);
               }}
               onCancel={() => setShowAddRoot(false)}
@@ -183,22 +277,36 @@ const App = () => {
           )}
 
           <div className="space-y-3">
-            {getRootGoals(goals).map((goal) => (
-              <GoalItem
-                key={goal.id}
-                goal={goal}
-                goals={goals}
-                onUpdate={updateGoal}
-                onDelete={deleteGoal}
-                onToggleDone={toggleDone}
-                onToggleExpanded={toggleExpanded}
-                onAddChild={addGoal}
-                sortBy={sortOptions[goal.id] || "none"}
-                onSortChange={(sortBy) =>
-                  setSortOptions((prev) => ({ ...prev, [goal.id]: sortBy }))
-                }
-              />
-            ))}
+            {filteredRootGoals.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                {rootGoals.length === 0 
+                  ? "まだ目標がありません。「新しい大きな目標」ボタンから追加してください。"
+                  : "フィルター条件に一致する目標がありません。"}
+              </div>
+            ) : (
+              filteredRootGoals
+                .sort((a, b) => a.order - b.order)
+                .map((goal) => (
+                  <GoalItem
+                    key={goal.id}
+                    goal={goal}
+                    goals={goals}
+                    availableTags={availableTags}
+                    onUpdate={updateGoal}
+                    onDelete={deleteGoal}
+                    onToggleDone={toggleDone}
+                    onToggleExpanded={toggleExpanded}
+                    onAddChild={addGoal}
+                    sortBy={sortOptions[goal.id] || "order"}
+                    onSortChange={(sortBy) =>
+                      setSortOptions((prev) => ({ ...prev, [goal.id]: sortBy }))
+                    }
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  />
+                ))
+            )}
           </div>
         </div>
       </div>

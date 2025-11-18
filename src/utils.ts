@@ -1,4 +1,4 @@
-import type { Goal, GoalMap } from "./types";
+import type { Goal, GoalMap, FilterOptions, Statistics } from "./types";
 
 // UUID生成（簡易版）
 export const generateId = (): string => {
@@ -44,6 +44,9 @@ export const sortGoals = (
   
   return [...goals].sort((a, b) => {
     switch (sortBy) {
+      case 'order':
+        return a.order - b.order;
+      
       case 'deadline':
         if (!a.deadline && !b.deadline) return 0;
         if (!a.deadline) return 1;
