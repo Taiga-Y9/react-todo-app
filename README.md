@@ -1,12 +1,15 @@
 # SmallStep Todo - 階層的目標管理アプリ
 <img width="927" height="891" alt="Image" src="https://github.com/user-attachments/assets/f027b4b6-9aa8-4b8a-8e3b-6d82665617a6" />
 
+## Todo アプリをホストしている GitHub Pages の URL
+https://taiga-y9.github.io/react-todo-app/
+
 ## コンセプト
 「やるべきことはあるが、何をしたらいいかわからない、どこから手を付ければいいかわからない」　——そんな経験はありませんか?
 SmallStep Todoは、大きな目標を着実に達成するための階層的目標管理アプリです。「〇〇企業に就職したい」という大きな夢を、「面接の練習をする」「受け答えの想定問答を作る」「目を見て話す練習をする」といった具体的なタスクに細分化。一歩ずつ進んでいる実感を得ながら、確実にゴールへ近づけます。
-　
+
 ## なぜ作ったのか
-従来のTodoアプリには課題がありました：
+従来のTodoアプリには課題がありました。
 
 単純なチェックリストでは、「今どれくらい目標に近づいているのか」が実感しにくく、モチーションの維持が困難というもの。
 
@@ -71,9 +74,6 @@ export const calculateProgress = (goalId: string, goals: GoalMap): number => {
 各階層ごとに異なるソート条件を適用可能。
 期限, 重要度,進捗でのフィルタリングができます。
 フィルター適用時も階層構造を維持します。
-
-## Todo アプリをホストしている GitHub Pages の URL
-https://taiga-y9.github.io/react-todo-app/
 
 ## 開発履歴
 
